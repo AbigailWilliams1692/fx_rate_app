@@ -140,8 +140,64 @@ def get_exchange_rate_from_api(base_currency, target_currency):
     
     return None
 
+def get_historical_data_from_api(base_currency, target_currency, days=30):
+    """从Frankfurter API获取真实历史汇率数据"""
+    try:
+        # Frankfurter API支持历史数据查询
+        # 计算开始和结束日期
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # Frankfurter API URL for historical data
+        url = f"https://api.frankfurter.app/{start_date.strftime('%Y-%m-%d')}..{end_date.strftime('%Y-%m-%d')}?from={base_currency}&to={target_currency}"
+        
+        print(f"正在从Frankfurter API获取历史数据: {url}")
+        
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if 'rates' not in data:
+            print(f"Frankfurter API响应中没有rates字段: {data}")
+            return None
+        
+        history = []
+        
+        # Frankfurter API返回的数据格式: {"2023-01-01": {"USD": 1.0, "EUR": 0.85}}
+        for date_str, rates in data['rates'].items():
+            if target_currency in rates:
+                history.append({
+                    'date': date_str,
+                    'rate': round(rates[target_currency], 4),
+                    'timestamp': f"{date_str} 12:00:00"
+                })
+        
+        # 按日期排序
+        history.sort(key=lambda x: x['date'])
+        
+        print(f"成功获取{len(history)}天的历史数据")
+        return history
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Frankfurter API请求失败: {e}")
+        return None
+    except Exception as e:
+        print(f"获取历史数据时发生错误: {e}")
+        return None
+
 def generate_historical_data(base_currency, target_currency, days=30):
-    """生成历史汇率数据（模拟）"""
+    """获取历史汇率数据 - 优先使用真实API，失败时回退到模拟数据"""
+    
+    # 首先尝试从真实API获取数据
+    real_history = get_historical_data_from_api(base_currency, target_currency, days)
+    
+    if real_history and len(real_history) > 0:
+        return real_history
+    
+    # 如果真实API失败，回退到模拟数据
+    print(f"真实API获取失败，使用模拟数据 for {base_currency}/{target_currency}")
+    
     base_rate = 6.99 if base_currency == "USD" and target_currency == "CNY" else random.uniform(0.8, 1.2)
     
     history = []
